@@ -1,4 +1,4 @@
 # CyberSaurusRex
 
 ## Features
-1. Google cloud integration for automated cyber range deployer.
+1. Google cloud integration for automated cyber range deployment
