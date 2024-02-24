@@ -1,11 +1,11 @@
 import os
 from sshtunnel import SSHTunnelForwarder
 
-def connect(remote_ip):
+def connect(remote_ip, ssh_key_path):
 	server = SSHTunnelForwarder(
 		remote_ip,
 		ssh_username="",
-		ssh_pkey="~/.ssh/id_rsa",
+		ssh_pkey=ssh_key_path,
 		remote_bind_address=("localhost", 5901),
 		local_bind_address=("localhost", 5901)
 	)
@@ -23,11 +23,7 @@ def connect_vm():
 
 
 def is_windows():
-	if os.name == "nt":
-		return True
-	else:
-		return False
+	return os.name == "nt"
 
 
 
-connect("34.16.153.26")
