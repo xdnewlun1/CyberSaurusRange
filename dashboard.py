@@ -23,22 +23,42 @@ def launch_dashboard():
     zone = "us-west4-b"
 
     dashboard_window = ctk.CTkToplevel()
-    dashboard_window.geometry("400x400")
+    dashboard_window.geometry("800x800")
     dashboard_window.title("CyberSaurus Dashboard")
     
    # Create a frame 
     frame = ctk.CTkFrame(master=dashboard_window) 
     frame.pack(pady=20,padx=40, 
-	fill='both',expand=True) 
+	fill='both',expand=True)
+
+
 
     # Set the label inside the frame 
     label = ctk.CTkLabel(master=frame, 
 	text='VMs') 
     label.pack(pady=12,padx=10) 
-
+    
+    
     instances = list_instances(project_id,zone)
     for instance_name in instances:
         instance_label = ctk.CTkLabel(master=frame, text=instance_name)
-        instance_label.pack()
+        instance_label.pack(anchor='w')
+
+   # Buttons frame at the bottom
+    buttons_frame = ctk.CTkFrame(master=dashboard_window)
+    buttons_frame.pack(side='bottom', fill='x', padx=20, pady=10)
+
+    # Define buttons
+    snapshot_btn = ctk.CTkButton(buttons_frame, text="Snapshot", command=lambda: print("Snapshot clicked"))
+    deploy_lab_btn = ctk.CTkButton(buttons_frame, text="Deploy Lab", command=lambda: print("Deploy Lab clicked"))
+    new_vm_btn = ctk.CTkButton(buttons_frame, text="New VM", command=lambda: print("New VM clicked"))
+    destroy_btn = ctk.CTkButton(buttons_frame, text="Destroy", command=lambda: print("Destroy clicked"))
+
+    # Place buttons in the buttons_frame
+    snapshot_btn.pack(side='left', expand=True, fill='both', padx=5, pady=5)
+    deploy_lab_btn.pack(side='left', expand=True, fill='both', padx=5, pady=5)
+    new_vm_btn.pack(side='left', expand=True, fill='both', padx=5, pady=5)
+    destroy_btn.pack(side='left', expand=True, fill='both', padx=5, pady=5)
+
 
     dashboard_window.mainloop()
