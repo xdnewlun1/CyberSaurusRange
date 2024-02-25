@@ -67,16 +67,23 @@ def add_group(tree, group_name="new_group"):
         input_name = ctk.CTkInputDialog(text="Enter New Group Name:", title="New Group")
         user_input = input_name.get_input()
         is_running = False
-        if bool(re.match(r'^[a-z0-9_-]+', user_input)) == False:
-            tkmb.showwarning(title="Error", message="Group names can only include lowercase characters, numbers, and - or _!")
+        if bool(re.match(r'^[a-z0-9_]+', user_input)) == False:
+            tkmb.showwarning(title="Error", message="Group names can only include lowercase characters, numbers, and _!")
             is_running = True
     selected = tree.selection()
-    for target in selected:
+    sel_ind = []
+    tree_chil = tree.get_children()
+    for sel in selected:
+        sel_ind.append(tree_chil.index(sel))
+    for ind in sel_ind:
+        target = tree.get_children()[ind]
         working_item=tree.item(target)
         item_values = working_item['values']
         groups = str(item_values[3]).split(" ")
         new_groups = '-'.join(groups)
         new_groups = new_groups + "-" + user_input
+        if "{}" in new_groups:
+            new_groups = user_input
 
 
         test = compute_client.GetInstanceRequest(
@@ -168,7 +175,7 @@ def launch_dashboard():
     search.pack(pady=12,anchor='e',padx=10)
     search.bind("<Key>", command=lambda event, tree=tree: search_instances(event, tree))
 
-    tree.bind("<ButtonRelease-1>", lambda event: printDetails(tree))
+    tree.bind("<Double-Button-1>", lambda event: printDetails(tree))
    # Buttons frame at the bottom
     buttons_frame = ctk.CTkFrame(master=dashboard_window)
     buttons_frame.pack(side='bottom', fill='x', padx=20, pady=10)
