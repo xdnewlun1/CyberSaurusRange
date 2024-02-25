@@ -5,7 +5,7 @@ import customtkinter as ctk
 from tkinter import *
 from tkinter import ttk
 from google.cloud import compute_v1
-from connect_vm import connect_vm
+from connect_vm import connect
 credential_path = "/home/toor/googlecreds"
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credential_path
 
@@ -17,13 +17,13 @@ def list_instances(project_id,zone):
     compute_client = compute_v1.InstancesClient()
     # Make the request to list instances
     for instance in compute_client.list(project=project_id,zone=zone):
-        instances_list.append((instance.name,instance.status,instance.network_interfaces[0].access_configs[0].nat_i_p))
+        instances_list.append([instance.name,instance.status,instance.network_interfaces[0].access_configs[0].nat_i_p])
     return instances_list
 def on_connect_button_click(ip_address, ssh_key_path):
     connect(ip_address, ssh_key_path)
 def printFocus(tree):
-    curItem = tree.focus()
-    print(curItem)
+    curItem = tree.item(tree.focus())
+    connect(curItem["values"][2],"/home/toor/.ssh/id_rsa")
 def launch_dashboard():
     project_id = "glossy-window-415318"
     zone = "us-west4-b"
@@ -57,7 +57,7 @@ def launch_dashboard():
 
     for instance in instances:
         connect_button = ctk.CTkButton(tree, text="Connect", command=lambda ip=instance[2]: on_connect_button_click(ip, "path/to/your/ssh/key.pem"))
-        tree.insert("", "end", values=(*instances,connect_button))
+        tree.insert("", "end", values=instance)
 
     tree.pack(fill='both', expand=True)
 
