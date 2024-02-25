@@ -12,6 +12,7 @@ import tkinter.messagebox as tkmb
 from google.cloud import compute_v1
 from connect_vm import connect
 from google.api_core.extended_operation import ExtendedOperation
+import time
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("green")
@@ -396,6 +397,115 @@ def vm_creation_manager(tree):
 
     deploy_instance_list(tree, "", True)
 
+def create_disk_from_snapshot( project_id: str, zone: str, disk_name: str, disk_type: str, disk_size_gb: int, snapshot_link: str,) -> compute_v1.Disk:
+    disk_client = compute_v1.DisksClient()
+    disk = compute_v1.Disk()
+    disk.zone = zone
+    disk.size_gb = disk_size_gb
+    disk.source_snapshot = snapshot_link
+    disk.type_ = disk_type
+    disk.name = disk_name
+    operation = disk_client.insert(project=project_id, zone=zone, disk_resource=disk)
+
+    wait_for_extended_operation(operation, "disk creation")
+
+    return disk_client.get(project=project_id, zone=zone, disk=disk_name)
+
+def revert_snapshot(instance_id, snap_tree):
+    curItem = snap_tree.item(snap_tree.focus())
+    snapshot_link = curItem["values"][4]
+    disk_size_gb = curItem["values"][3]
+    # Create the new snapshot disk from the snapshot
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    new_snapshot_disk = create_disk_from_snapshot(project_id=project_id,zone=zone,
+                                                disk_name=f"{curItem["values"][0]}-{instance_id}-{timestr}",
+                                                disk_type=f"zones/{zone}/diskTypes/pd-standard",
+                                                disk_size_gb=disk_size_gb,
+                                                snapshot_link=snapshot_link)
+    
+    compute_client = compute_v1.InstancesClient()
+    instance = compute_client.get(project=project_id, zone=zone, instance=instance_id)
+    
+    # Stop the VM
+    request = compute_v1.StopInstanceRequest(
+        instance=instance_id,
+        project=project_id,
+        zone=zone
+        )
+    operation = compute_client.stop(request=request)
+    wait_for_extended_operation(operation, f"Stopping {instance_id}")
+
+    # Detach the disk
+    for disk in instance.disks:
+        request = compute_v1.DetachDiskInstanceRequest(
+            device_name=disk.device_name,
+            instance=instance_id,
+            project=project_id,
+            zone=zone) 
+        operation = compute_client.detach_disk(request=request)
+        wait_for_extended_operation(operation, f"detaching {disk.device_name}")
+
+    # Attach the snapshot disk
+    print(new_snapshot_disk)
+    adisk = compute_v1.AttachedDisk()
+    adisk.source = new_snapshot_disk.self_link
+    adisk.boot = True
+
+    request = compute_v1.AttachDiskInstanceRequest(
+        instance=instance_id,
+        project=project_id,
+        zone=zone,
+        attached_disk_resource=adisk
+    )
+    operation = compute_client.attach_disk(request=request)
+    wait_for_extended_operation(operation, f"attaching snapshot disk")
+
+    # Start the VM
+    request = compute_v1.StartInstanceRequest(
+        instance=instance_id,
+        project=project_id,
+        zone=zone
+        )
+    operation = compute_client.start(request=request)
+    tkmb.showwarning(title="Snapshot Reverting", message=f"Reverting will take a few minutes. Please be patients.")
+    wait_for_extended_operation(operation, f"Starting {instance_id}")
+
+    tkmb.showwarning(title="Snapshot Reverted", message=f"{instance_id} has been reverted to {curItem["values"][0]}")
+
+def revert_to_snapshot_manager(tree):
+    snapshot_manager_window = ctk.CTkToplevel()
+    curItem = tree.item(tree.focus())
+    instance_id = curItem["values"][0]
+    snapshot_manager_window.title(f"Snapshot Manager for Instance: {instance_id}")
+    snapshot_manager_window.config(width=400, height=200)
+
+    # Create a frame 
+    frame = ctk.CTkFrame(master=snapshot_manager_window) 
+    frame.pack(pady=20,padx=40, 
+    fill='both',expand=True)
+
+    # Table-like structure using Treeview
+    snap_tree = ttk.Treeview(master=frame, columns=("Name", "Status","ID","disk_size_gb","snapshot_link"), show="headings")
+    snap_tree.heading("Name", text="VM")
+    snap_tree.heading("Status", text="Status")
+    snap_tree.heading("ID", text="ID")
+    snap_tree.heading("disk_size_gb", text="Disk Size (GB)")
+    snap_tree.heading("snapshot_link", text="Snapshot Link")
+    
+
+    snap_client = compute_v1.SnapshotsClient()
+    request = compute_v1.ListSnapshotsRequest(project=project_id)
+
+    # Make the request
+    instances = snap_client.list(request=request)
+    for instance in instances:
+        snap_tree.insert("", "end", values=(instance.name,instance.status,instance.id,instance.disk_size_gb,instance.self_link))
+    snap_tree.pack(fill='both', expand=True)
+
+    #Instance Buttons
+    test_button = ctk.CTkButton(master=frame, text="revert", command=lambda: revert_snapshot(instance_id, snap_tree))
+    test_button.pack(side='left', expand=True, fill='both', padx=5, pady=5)
+
 def launch_dashboard():
     dashboard_window = ctk.CTkToplevel()
     dashboard_window.geometry("700x400")
@@ -460,7 +570,7 @@ def launch_dashboard():
 
 
     # Define buttons
-    tbd2_btn = ctk.CTkButton(buttons_frame, text="Clone VM", command=lambda: printFocus(tree))
+    tbd2_btn = ctk.CTkButton(buttons_frame, text="Revert to Snapshot VM", command=lambda: revert_to_snapshot_manager(tree))
     deploy_lab_btn = ctk.CTkButton(buttons_frame, text="Reload VMs", command=lambda: deploy_instance_list(tree, "", True))
     new_vm_btn = ctk.CTkButton(buttons_frame, text="Add Group", command=lambda: add_group(tree))
     destroy_btn = ctk.CTkButton(buttons_frame, text="Destroy VMs", command=lambda: deleteVMS(tree))
@@ -471,9 +581,9 @@ def launch_dashboard():
     #new_vm_btn.pack(side='left', expand=True, fill='both', padx=5, pady=5)
     #destroy_btn.pack(anchor='w', fill='both', padx=5, pady=5)
 
-    tbd2_btn.grid(row=1, column=0, padx=5, pady=5)
     deploy_lab_btn.grid(row=1, column=1, padx=5, pady=5)
     new_vm_btn.grid(row=1, column=2, padx=5, pady=5)
+    tbd2_btn.grid(row=1, column=0, padx=5, pady=5)
     destroy_btn.grid(row=1, column=3, padx=5, pady=5)
 
     dashboard_window.mainloop()
