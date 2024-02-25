@@ -6,7 +6,7 @@ from tkinter import *
 from tkinter import ttk
 from google.cloud import compute_v1
 from connect_vm import connect
-credential_path = "/home/toor/googlecreds"
+credential_path = "/home/toor/googlecreds" if (os.name != "nt") else ctk.filedialog.askopenfilename()
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credential_path
 
 ctk.set_appearance_mode("light")
@@ -17,10 +17,12 @@ def list_instances(project_id,zone):
     compute_client = compute_v1.InstancesClient()
     # Make the request to list instances
     for instance in compute_client.list(project=project_id,zone=zone):
-        instances_list.append([instance.name,instance.status,instance.network_interfaces[0].access_configs[0].nat_i_p])
+        instances_list.append([instance.id,instance.name,instance.status,instance.network_interfaces[0].access_configs[0].nat_i_p])
     return instances_list
+
 def on_connect_button_click(ip_address, ssh_key_path):
     connect(ip_address, ssh_key_path)
+
 def printFocus(tree):
     curItem = tree.item(tree.focus())
     connect(curItem["values"][2],"/home/toor/.ssh/id_rsa")
@@ -49,8 +51,9 @@ def launch_dashboard():
 
 
     # Table-like structure using Treeview
-    tree = ttk.Treeview(master=frame, columns=("VM", "Status","IP","Action"), show="headings")
-    tree.heading("VM", text="VM")
+    tree = ttk.Treeview(master=frame, columns=("ID", "Name", "Status","IP","Action"), show="headings")
+    tree.column("ID", width=0, stretch="no")
+    tree.heading("Name", text="Name")
     tree.heading("Status", text="Status")
     tree.heading("IP", text="IP")
     tree.heading("Action", text="Action")
