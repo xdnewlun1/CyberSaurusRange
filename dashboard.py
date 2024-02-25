@@ -384,6 +384,7 @@ def vm_creation_manager(tree):
         user_input_img = input_name.get_input()
         input_size = ctk.CTkInputDialog(text="VM Image Size (GB): ", title="VM Disk Size")
         user_input_size = int(input_size.get_input())
+
         is_running = False
         if user_input_img == "default":
             user_input_img = "projects/debian-cloud/global/images/debian-12-bookworm-v20240213"
@@ -392,6 +393,7 @@ def vm_creation_manager(tree):
             tkmb.showwarning(title="VM Error", message="VM Name must be all lowercase, numbers, or -")
 
     create_instance(project_id=project_id, zone=zone, instance_name=user_input, disks=[disk_from_image(f"zones/{zone}/diskTypes/pd-standard", disk_size_gb=input_size, boot=True, source_image=user_input_img)])
+
     deploy_instance_list(tree, "", True)
 
 def launch_dashboard():
@@ -474,6 +476,4 @@ def launch_dashboard():
     new_vm_btn.grid(row=1, column=2, padx=5, pady=5)
     destroy_btn.grid(row=1, column=3, padx=5, pady=5)
 
-    
-    
     dashboard_window.mainloop()
