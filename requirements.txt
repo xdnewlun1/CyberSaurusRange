@@ -1,3 +1,4 @@
 sshtunnel
 customtkinter
 google-cloud-compute
+typing
