@@ -28,6 +28,38 @@ def on_connect_button_click(ip_address, key_path):
 def printFocus(tree,key_path):
     curItem = tree.item(tree.focus())
     connect(curItem["values"][2],key_path)
+def getDetails(project_id, zone, instance_id):
+    compute_client = compute_v1.InstancesClient()
+    instance = compute_client.get(project=project_id, zone=zone, instance=instance_id)
+    details = {
+        "Name": instance.name,
+        "ID": instance.id,
+        "Machine Type": instance.machine_type,
+        "Description": instance.description,
+        "Status": instance.status,
+        "Internal IP": instance.network_interfaces[0].network_i_p,
+        "External IP": instance.network_interfaces[0].access_configs[0].nat_i_p,
+        "Disks": instance.disks[0].source,
+        "CPU": instance.cpu_platform,
+        "Zone": instance.zone
+    }
+
+    return details
+def printDetails(tree):
+    curItem = tree.item(tree.focus())
+    instance_id = curItem["values"][0]
+    project_id = "glossy-window-415318"
+    zone = "us-west4-b"  
+
+    detailed_info = getDetails(project_id, zone, instance_id)
+
+    popup_window = ctk.CTkToplevel()
+    popup_window.title(f"Details for Instance: {instance_id}")
+    popup_window.geometry("400x300")
+
+    for key, value in detailed_info.items():
+        label = ctk.CTkLabel(popup_window, text=f"{key}: {value}")
+        label.pack(pady=5, padx=10)
 def launch_dashboard():
     project_id = "glossy-window-415318"
     zone = "us-west4-b"
@@ -64,7 +96,7 @@ def launch_dashboard():
 
     tree.pack(fill='both', expand=True)
 
-
+    tree.bind("<ButtonRelease-1>", lambda event: printDetails(tree))
    # Buttons frame at the bottom
     buttons_frame = ctk.CTkFrame(master=dashboard_window)
     buttons_frame.pack(side='bottom', fill='x', padx=20, pady=10)
