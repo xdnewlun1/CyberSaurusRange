@@ -3,6 +3,7 @@ import os
 import io
 import re
 import sys
+import warnings
 from typing import Any
 import customtkinter as ctk
 from tkinter import *
@@ -265,6 +266,15 @@ def create_snapshot(
     return snapshot_client.get(project=project_id, snapshot=snapshot_name)
 
 def snapshot_creation_manager(tree):
+    is_running = True
+    while is_running:
+        input_name = ctk.CTkInputDialog(text="Enter the Snapshot Name:", title="Snapshot Name")
+        user_input = input_name.get_input()
+        is_running = False
+        if bool(re.match(r'^[a-z0-9-]+', user_input)) == False:
+            is_running = True
+            tkmb.showwarning(title="Snapshot Error", message="Snapshot Name must be all lowercase, numbers, or -")
+
     selected = tree.selection()
     sel_ind = []
     tree_chil = tree.get_children()
@@ -276,9 +286,112 @@ def snapshot_creation_manager(tree):
         item_values = working_item['values']
         create_snapshot(project_id=project_id, disk_name=item_values[0], snapshot_name=item_values[0]+"-snapshot", zone=zone)
 
+def get_image_from_family(project: str, family: str) -> compute_v1.Image:
+    image_client = compute_v1.ImagesClient()
+    newest_image = image_client.get_from_family(project=project, family=family)
+    return newest_image
+
+def disk_from_image(disk_type: str, disk_size_gb: int, boot: bool, source_image: str, auto_delete: bool = True) -> compute_v1.AttachedDisk:
+    boot_disk = compute_v1.AttachedDisk()
+    initialize_params = compute_v1.AttachedDiskInitializeParams()
+    initialize_params.source_image = source_image
+    initialize_params.disk_size_gb = disk_size_gb
+    initialize_params.disk_type = disk_type
+    boot_disk.initialize_params = initialize_params
+    boot_disk.auto_delete = auto_delete
+    boot_disk.boot = boot
+    return boot_disk
+
+def create_instance(project_id: str, zone: str, instance_name: str, disks: list[compute_v1.AttachedDisk], machine_type: str = "e2-micro", network_link: str = "global/networks/default", subnetwork_link: str = None, internal_ip: str = None, external_access: bool = True, external_ipv4: str = None, accelerators: list[compute_v1.AcceleratorConfig] = None, preemptible: bool = False, spot: bool = False, instance_termination_Action: str = "STOP", custom_hostname: str = None, delete_protection: bool = False, ) -> compute_client.Instance:
+    instance_client = compute_client.InstancesClient()
+    network_interfaces = compute_v1.NetworkInterface()
+    network_interfaces.network = network_link
+    network_interfaces.subnetwork = f"projects/{project_id}/regions/us-west4/subnetworks/default"
+
+    if internal_ip:
+        network_interfaces.network_i_p = internal_ip
+
+    if external_access:
+        access = compute_v1.AccessConfig()
+        access.type_ = compute_v1.AccessConfig.Type.ONE_TO_ONE_NAT.name
+        access.name = "External NAT"
+        access.network_tier = access.NetworkTier.PREMIUM.name
+        if external_ipv4:
+            access.nat_i_p = external_ipv4
+        network_interfaces.access_configs = [access]
+
+    instance = compute_v1.Instance()
+    instance.network_interfaces = [network_interfaces]
+    instance.name = instance_name
+    instance.disks = disks
+    if re.match(r"^zones/[a-z\d\-]+/machineTypes/[a-z\d\-]+$", machine_type):
+        instance.machine_type = machine_type
+    else:
+        instance.machine_type = f"zones/{zone}/machineTypes/{machine_type}"
+
+    instance.scheduling = compute_v1.Scheduling()
+    if accelerators:
+        instance.guest_accelerators = accelerators
+        instance.scheduling.on_host_maintenance = (
+            compute_v1.Scheduling.OnHostMaintenance.TERMINATE.name
+        )
+
+    if preemptible:
+        warnings.warn(
+            "Preemptible VMs are being replaced by Spot VMs.", DeprecationWarning
+        )
+        instance.scheduling = compute_v1.Scheduling()
+        instance.scheduling.preemptible = True
+
+    if spot:
+        instance.scheduling.provisioning_model = (
+            compute_v1.Scheduling.ProvisioningModel.SPOT.name
+        )
+        instance.scheduling.instance_terminiation_action = instance_terminiation_action
+
+    if custom_hostname is not None:
+        instance.hostname = custom_hostname
+
+    if delete_protection:
+        instance.deletion_protection = True
+
+    request = compute_v1.InsertInstanceRequest()
+    request.zone = zone
+    request.project = project_id
+    request.instance_resource = instance
+    tkmb.showwarning(title="Instance Created", message="Creating Instance; This will take a few moments! Please be patient")
+
+    operation = instance_client.insert(request=request)
+    wait_for_extended_operation(operation, "instance creation")
+
+    tkmb.showwarning(title="Instance Created", message="Instance Created!")
+    return instance_client.get(project=project_id, zone=zone, instance=instance_name)
+
+def vm_creation_manager(tree):
+    is_running = True
+    while is_running:
+        input_name = ctk.CTkInputDialog(text="Enter the new VM name:", title="Instance Name")
+        user_input = input_name.get_input()
+        is_running = False
+        if bool(re.match(r'^[a-z0-9-/]+', user_input)) == False:
+            is_running = True
+            tkmb.showwarning(title="VM Error", message="VM Name must be all lowercase, numbers, or -")
+
+    is_running = True
+    while is_running:
+        input_name = ctk.CTkInputDialog(text="Enter the VM Image Path, or type `default` for debian", title="VM Image Selection")
+        user_input_img = input_name.get_input()
+        is_running = False
+        if user_input_img == "default":
+            user_input_img = "projects/debian-cloud/global/images/debian-12-bookworm-v20240213"
+        if bool(re.match(r'^[a-z0-9-/]+', user_input_img)) == False:
+            is_running = True
+            tkmb.showwarning(title="VM Error", message="VM Name must be all lowercase, numbers, or -")
+
+    create_instance(project_id=project_id, zone=zone, instance_name=user_input, disks=[disk_from_image(f"zones/{zone}/diskTypes/pd-standard", disk_size_gb=10, boot=True, source_image=user_input_img)])
+    deploy_instance_list(tree, "", True)
 
 def launch_dashboard():
-
     dashboard_window = ctk.CTkToplevel()
     dashboard_window.geometry("700x400")
     dashboard_window.title("CyberSaurus Dashboard")
@@ -326,7 +439,7 @@ def launch_dashboard():
     start_btn = ctk.CTkButton(buttons_frame, text="Start VMs", command=lambda: startVMS(tree))
     stop_btn = ctk.CTkButton(buttons_frame, text="Stop VMs", command=lambda: stopVMS(tree))
     snapshot_btn = ctk.CTkButton(buttons_frame, text="Snapshot VMs", command=lambda: snapshot_creation_manager(tree))
-    tbd_btn = ctk.CTkButton(buttons_frame, text="Create VM", command=lambda: print("Destroy clicked"))
+    tbd_btn = ctk.CTkButton(buttons_frame, text="Create VM", command=lambda: vm_creation_manager(tree))
 
     # Place buttons in the buttons_frame
     #start_btn.pack(side='top', expand=True, fill='both', padx=5, pady=5)
