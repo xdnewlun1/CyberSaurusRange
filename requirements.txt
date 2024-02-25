@@ -1,0 +1,3 @@
+sshtunnel
+customtkinter
+google-cloud-compute
